@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess, type StdioOptions } from 'child_process'
+import { spawn, type ChildProcess, type StdioOptions, SpawnOptionsWithStdioTuple } from 'child_process'
 type ExecFileOptions = {
   input?: string
   timeout?: number
@@ -39,7 +39,14 @@ export function execFileNoThrow(
     const child: ChildProcess = spawn(file, args, {
       cwd: options.useCwd ? process.cwd() : undefined,
       env: options.env,
-      stdio: stdioConfig
+
+      // When resolveOnExit is true, ignore stdout/stderr so the daemon
+      // doesn't inherit those pipe FDs — prevents handle leaks that can
+      // keep the parent process alive. No output data is collected in
+      // this mode; both stdout and stderr will be empty strings.
+      stdio: options.resolveOnExit
+        ? ['pipe', 'ignore', 'ignore']
+        : 'pipe'
     })
 
     let stdout = ''
