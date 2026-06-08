@@ -75,6 +75,12 @@ export interface DesktopCommandSpec {
    * the status bar), so the popover doesn't dead-end on inline completion.
    */
   hidden?: boolean
+  /**
+   * The command has an inline options "screen" (theme / personality / session /
+   * platform / toolset list). Picking the bare command in the popover expands to
+   * that argument step instead of committing — mirroring typing `/<cmd> ` by hand.
+   */
+  args?: boolean
 }
 
 const exec = (): DesktopCommandSurface => ({ kind: 'exec' })
@@ -92,9 +98,9 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
   { name: '/new', description: 'Start a new desktop chat', aliases: ['/reset'], surface: action('new') },
   { name: '/branch', description: 'Branch the latest message into a new chat', aliases: ['/fork'], surface: action('branch') },
   { name: '/yolo', description: 'Toggle YOLO — auto-approve dangerous commands', surface: action('yolo') },
-  { name: '/handoff', description: 'Hand off this session to a messaging platform', surface: action('handoff') },
+  { name: '/handoff', description: 'Hand off this session to a messaging platform', surface: action('handoff'), args: true },
   { name: '/profile', description: 'Switch the active Hermes profile', surface: action('profile') },
-  { name: '/skin', description: 'Switch desktop theme or cycle to the next one', surface: action('skin') },
+  { name: '/skin', description: 'Switch desktop theme or cycle to the next one', surface: action('skin'), args: true },
   { name: '/title', description: 'Rename the current session', surface: action('title') },
   { name: '/help', description: 'Show desktop slash commands', aliases: ['/commands'], surface: action('help') },
 
@@ -104,7 +110,8 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
     name: '/resume',
     description: 'Resume a saved session',
     aliases: ['/sessions', '/switch'],
-    surface: picker('session')
+    surface: picker('session'),
+    args: true
   },
 
   // Backend-executed commands that render useful inline output
@@ -113,7 +120,7 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
   { name: '/compress', description: 'Compress this conversation context', surface: exec() },
   { name: '/debug', description: 'Create a debug report', surface: exec() },
   { name: '/goal', description: 'Manage the standing goal for this session', surface: exec() },
-  { name: '/personality', description: 'Switch personality for this session', surface: exec() },
+  { name: '/personality', description: 'Switch personality for this session', surface: exec(), args: true },
   { name: '/queue', description: 'Queue a prompt for the next turn', aliases: ['/q'], surface: exec() },
   { name: '/retry', description: 'Retry the last user message', surface: exec() },
   { name: '/rollback', description: 'List or restore filesystem checkpoints', surface: exec() },
@@ -121,7 +128,7 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
   { name: '/status', description: 'Show current session status', surface: exec() },
   { name: '/steer', description: 'Steer the current run after the next tool call', surface: exec() },
   { name: '/stop', description: 'Stop running background processes', surface: exec() },
-  { name: '/tools', description: 'List or toggle tools available to the agent', surface: exec() },
+  { name: '/tools', description: 'List or toggle tools available to the agent', surface: exec(), args: true },
   { name: '/undo', description: 'Remove the last user/assistant exchange', surface: exec() },
   { name: '/usage', description: 'Show token usage for this session', surface: exec() },
   { name: '/version', description: 'Show Hermes Agent version', surface: exec() },
@@ -281,6 +288,15 @@ export function desktopSlashUnavailableMessage(command: string): string | null {
 
 export function desktopSlashDescription(command: string, fallback = ''): string {
   return SPEC_BY_NAME.get(canonicalDesktopSlashCommand(command))?.description || fallback
+}
+
+/**
+ * True when picking the bare command should expand to its inline argument
+ * options (theme / personality / session / platform / toolset) rather than
+ * committing immediately. Lets the popover act as a two-step picker.
+ */
+export function desktopSlashCommandTakesArgs(command: string): boolean {
+  return resolveDesktopCommand(command)?.args ?? false
 }
 
 export function desktopSkinSlashCompletions(
