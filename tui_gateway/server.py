@@ -2429,10 +2429,8 @@ def _agent_cbs(sid: str) -> dict:
         "clarify_callback": lambda q, c: _block(
             "clarify.request", sid, {"question": q, "choices": c}
         ),
-        # Desktop GUI only: the in-app terminal buffer lives in the renderer, so
-        # the read_terminal tool round-trips through the same blocking bridge as
-        # clarify — emit terminal.read.request, the desktop answers with
-        # terminal.read.respond (a JSON string of buffer text + line metadata).
+        # read_terminal tool (desktop GUI): same blocking bridge as clarify — the
+        # renderer answers terminal.read.respond with the serialized buffer.
         "read_terminal_callback": lambda start=None, count=None: _block(
             "terminal.read.request",
             sid,

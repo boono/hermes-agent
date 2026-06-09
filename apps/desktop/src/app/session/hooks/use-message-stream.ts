@@ -909,12 +909,8 @@ export function useMessageStream({
           }
         }
       } else if (event.type === 'terminal.read.request') {
-        // The GUI agent's `read_terminal` tool. The in-app terminal buffer lives
-        // here in the renderer, so we serialize it and answer immediately — the
-        // Python side is blocked on `terminal.read.respond` (see
-        // tools/read_terminal_tool.py + tui_gateway/server.py:_block). No user
-        // interaction, unlike clarify/approval. An empty `text` tells the tool
-        // there's no live terminal pane to read.
+        // read_terminal tool: serialize the renderer's xterm buffer and answer
+        // immediately (Python blocks on the respond). Empty text = no live pane.
         const requestId = typeof payload?.request_id === 'string' ? payload.request_id : ''
 
         if (requestId) {
