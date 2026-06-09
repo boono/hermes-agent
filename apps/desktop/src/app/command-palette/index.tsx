@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { $terminalTakeover, setTerminalTakeover } from '@/app/right-sidebar/store'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { KbdGroup } from '@/components/ui/kbd'
 import { getHermesConfigRecord, listSessions } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
@@ -36,8 +37,10 @@ import {
   Wrench,
   Zap
 } from '@/lib/icons'
+import { comboTokens } from '@/lib/keybinds/combo'
 import { cn } from '@/lib/utils'
 import { $commandPaletteOpen, closeCommandPalette, setCommandPaletteOpen } from '@/store/command-palette'
+import { $bindings } from '@/store/keybinds'
 import { type ThemeMode, useTheme } from '@/themes/context'
 
 import {
@@ -58,6 +61,8 @@ import { prettyName } from '../settings/helpers'
 
 interface PaletteItem {
   active?: boolean
+  /** Keybind action id — its live combo renders as a hotkey hint. */
+  action?: string
   icon: IconComponent
   id: string
   /** Keep the palette open after running (live-preview pickers like theme/mode). */
@@ -152,6 +157,7 @@ export function CommandPalette() {
   const { t } = useI18n()
   const open = useStore($commandPaletteOpen)
   const terminalOpen = useStore($terminalTakeover)
+  const bindings = useStore($bindings)
   const navigate = useNavigate()
   const { availableThemes, mode, resolvedMode, setMode, setTheme, themeName } = useTheme()
   const [search, setSearch] = useState('')
@@ -220,6 +226,7 @@ export function CommandPalette() {
         heading: cc.goTo,
         items: [
           {
+            action: 'session.new',
             icon: Plus,
             id: 'nav-new',
             keywords: ['chat', 'create'],
@@ -227,6 +234,7 @@ export function CommandPalette() {
             run: go(NEW_CHAT_ROUTE)
           },
           {
+            action: 'view.showTerminal',
             active: terminalOpen,
             icon: Terminal,
             id: 'nav-terminal',
@@ -234,25 +242,45 @@ export function CommandPalette() {
             label: t.keybinds.actions['view.showTerminal'],
             run: () => setTerminalTakeover(true)
           },
-          { icon: Settings, id: 'nav-settings', label: cc.nav.settings.title, run: go(SETTINGS_ROUTE) },
           {
+            action: 'nav.settings',
+            icon: Settings,
+            id: 'nav-settings',
+            label: cc.nav.settings.title,
+            run: go(SETTINGS_ROUTE)
+          },
+          {
+            action: 'nav.skills',
             icon: Wrench,
             id: 'nav-skills',
             keywords: ['tools', 'toolsets'],
             label: cc.nav.skills.title,
             run: go(SKILLS_ROUTE)
           },
-          { icon: MessageCircle, id: 'nav-messaging', label: cc.nav.messaging.title, run: go(MESSAGING_ROUTE) },
-          { icon: Package, id: 'nav-artifacts', label: cc.nav.artifacts.title, run: go(ARTIFACTS_ROUTE) },
           {
+            action: 'nav.messaging',
+            icon: MessageCircle,
+            id: 'nav-messaging',
+            label: cc.nav.messaging.title,
+            run: go(MESSAGING_ROUTE)
+          },
+          {
+            action: 'nav.artifacts',
+            icon: Package,
+            id: 'nav-artifacts',
+            label: cc.nav.artifacts.title,
+            run: go(ARTIFACTS_ROUTE)
+          },
+          {
+            action: 'nav.cron',
             icon: Clock,
             id: 'nav-cron',
             keywords: ['schedule', 'jobs'],
             label: t.shell.statusbar.cron,
             run: go(CRON_ROUTE)
           },
-          { icon: Users, id: 'nav-profiles', label: t.profiles.title, run: go(PROFILES_ROUTE) },
-          { icon: Cpu, id: 'nav-agents', label: t.agents.title, run: go(AGENTS_ROUTE) }
+          { action: 'nav.profiles', icon: Users, id: 'nav-profiles', label: t.profiles.title, run: go(PROFILES_ROUTE) },
+          { action: 'nav.agents', icon: Cpu, id: 'nav-agents', label: t.agents.title, run: go(AGENTS_ROUTE) }
         ]
       },
       {
@@ -508,6 +536,8 @@ export function CommandPalette() {
                 >
                   {group.items.map(item => {
                     const Icon = item.icon
+                    const combo = item.action ? bindings[item.action]?.[0] : undefined
+                    const keys = combo ? comboTokens(combo) : null
 
                     return (
                       <CommandItem
@@ -519,10 +549,15 @@ export function CommandPalette() {
                       >
                         <Icon className="size-4 shrink-0 text-muted-foreground" />
                         <span className="truncate">{item.label}</span>
+                        {keys && <KbdGroup className="ml-auto" keys={keys} />}
                         {item.to ? (
-                          <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground/70" />
+                          <ChevronRight
+                            className={cn('size-4 shrink-0 text-muted-foreground/70', !keys && 'ml-auto')}
+                          />
                         ) : (
-                          <Check className={cn('ml-auto size-4 text-foreground', !item.active && 'invisible')} />
+                          <Check
+                            className={cn('size-4 text-foreground', !keys && 'ml-auto', !item.active && 'invisible')}
+                          />
                         )}
                       </CommandItem>
                     )

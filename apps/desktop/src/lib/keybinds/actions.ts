@@ -1,5 +1,3 @@
-import { IS_MAC } from './combo'
-
 // The single source of truth for rebindable desktop hotkeys.
 //
 // Each entry is pure metadata: an id, a category, and the default combo(s).
@@ -39,9 +37,10 @@ const PROFILE_SWITCH_ACTIONS: KeybindActionMeta[] = Array.from({ length: PROFILE
   defaults: [comboForSlot(i + 1)]
 }))
 
-// macOS: ⌃` (Control+backtick), the VS Code convention. ⌘` is reserved for
-// window cycling, so we use plain Control. Elsewhere: Ctrl+` via `mod`.
-const TERMINAL_TOGGLE_DEFAULTS = IS_MAC ? ['ctrl+`', 'ctrl+shift+`'] : ['mod+`', 'mod+shift+`']
+// ⌘` on macOS / Ctrl+` elsewhere (the `~` key), plus the Shift/tilde variant.
+// `mod` keeps one binding cross-platform; on macOS this shadows the system
+// window-cycler, which is fine for a single-window app.
+const TERMINAL_TOGGLE_DEFAULTS = ['mod+`', 'mod+shift+`']
 
 export const KEYBIND_ACTIONS: readonly KeybindActionMeta[] = [
   // ── Composer ─────────────────────────────────────────────────────────────

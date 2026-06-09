@@ -1119,7 +1119,7 @@ export const en: Translations = {
     ],
     startVoice: 'Start voice conversation',
     queueMessage: 'Queue message',
-    steer: 'Steer the current run (⌘⏎)',
+    steer: 'Steer the current run',
     stop: 'Stop',
     send: 'Send',
     speaking: 'Speaking',
