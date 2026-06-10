@@ -5507,36 +5507,57 @@ function windowsPowerShellPath() {
   return isExecutableFile(builtin) ? builtin : findOnPath('powershell.exe')
 }
 
-// Default to PowerShell (pwsh 7+, then Windows PowerShell 5.1), falling back to
-// comspec/cmd.exe only when neither is present. `-NoLogo` drops the startup
-// banner so the prompt sits flush at the top like the POSIX shells.
+// Map a resolved shell path to its spawn spec, picking interactive flags by
+// family: PowerShell drops its logo banner (so the prompt sits flush like the
+// POSIX shells), cmd needs nothing, and everything else (zsh/bash/fish/sh…)
+// gets POSIX interactive-login flags.
+function shellSpecFor(shellPath) {
+  const name = path.basename(shellPath).toLowerCase()
+
+  if (name.startsWith('pwsh') || name.startsWith('powershell')) {
+    return { args: ['-NoLogo'], command: shellPath, name }
+  }
+
+  if (name.startsWith('cmd')) {
+    return { args: [], command: shellPath, name }
+  }
+
+  return posixShellSpec(shellPath)
+}
+
+// Best installed Windows shell: PowerShell 7+ (`pwsh`), then Windows PowerShell
+// 5.1, then comspec/cmd.exe as the universal fallback.
 function windowsShellSpec() {
   const command =
     findOnPath('pwsh.exe') || findOnPath('pwsh') || windowsPowerShellPath() || process.env.COMSPEC || 'cmd.exe'
-  const name = path.basename(command).toLowerCase()
-  const args = name.startsWith('pwsh') || name.startsWith('powershell') ? ['-NoLogo'] : []
 
-  return { args, command, name }
+  return shellSpecFor(command)
 }
 
+// Resolve the interactive shell for the embedded terminal: an explicit user
+// override wins, otherwise auto-detect the best one installed for the platform.
 function terminalShellCommand() {
+  // HERMES_DESKTOP_SHELL is the cross-platform escape hatch (a path or a bare
+  // name on PATH); $SHELL is honored on POSIX, where it's the user's canonical
+  // choice, but ignored on Windows, where it's usually a stray MSYS/Git path
+  // node-pty can't spawn natively.
+  const override = (process.env.HERMES_DESKTOP_SHELL || (IS_WINDOWS ? '' : process.env.SHELL) || '').trim()
+
+  if (override) {
+    const resolved = isExecutableFile(override) ? override : findOnPath(override)
+
+    if (resolved) {
+      return shellSpecFor(resolved)
+    }
+  }
+
   if (IS_WINDOWS) {
     return windowsShellSpec()
   }
 
-  const configuredShell = (process.env.SHELL || '').trim()
-
-  if (isExecutableFile(configuredShell)) {
-    return posixShellSpec(configuredShell)
-  }
-
   const shellPath = ['/bin/zsh', '/bin/bash', '/bin/sh'].find(candidate => isExecutableFile(candidate))
 
-  if (shellPath) {
-    return posixShellSpec(shellPath)
-  }
-
-  return posixShellSpec('/bin/sh')
+  return posixShellSpec(shellPath || '/bin/sh')
 }
 
 function safeTerminalCwd(cwd) {
