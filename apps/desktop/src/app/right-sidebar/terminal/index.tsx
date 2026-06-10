@@ -1,18 +1,15 @@
 import '@xterm/xterm/css/xterm.css'
 
-import { type CSSProperties, useMemo } from 'react'
-
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { Loader } from '@/components/ui/loader'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
-import { useTheme } from '@/themes/context'
 
 import { SidebarPanelLabel } from '../../shell/sidebar-label'
 import { setTerminalTakeover } from '../store'
 
-import { addSelectionShortcutLabel, terminalTheme } from './selection'
+import { addSelectionShortcutLabel } from './selection'
 import { useTerminalSession } from './use-terminal-session'
 
 interface TerminalTabProps {
@@ -22,8 +19,6 @@ interface TerminalTabProps {
 
 export function TerminalTab({ cwd, onAddSelectionToChat }: TerminalTabProps) {
   const { t } = useI18n()
-  const { resolvedMode } = useTheme()
-  const theme = useMemo(() => terminalTheme(resolvedMode), [resolvedMode])
 
   const { addSelectionToChat, hostRef, selection, selectionStyle, shellName, status } = useTerminalSession({
     cwd,
@@ -49,7 +44,7 @@ export function TerminalTab({ cwd, onAddSelectionToChat }: TerminalTabProps) {
           </Button>
         </Tip>
       </div>
-      <div className="relative min-h-0 flex-1 p-2" style={{ backgroundColor: theme.background }}>
+      <div className="relative min-h-0 flex-1 bg-(--ui-editor-surface-background) p-2">
         {status === 'starting' && (
           <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
             <Loader
@@ -79,11 +74,13 @@ export function TerminalTab({ cwd, onAddSelectionToChat }: TerminalTabProps) {
           </div>
         )}
         {/* Outer div paints terminal inset; inner div is the xterm host so the
-            canvas sizes to the content area and p-2 stays as terminal padding. */}
+            canvas sizes to the content area and p-2 stays as terminal padding.
+            Screen/viewport inherit the live skin surface so the terminal blends
+            with the app and follows light/dark; the xterm canvas itself is
+            painted the resolved surface color in use-terminal-session. */}
         <div
-          className="h-full min-h-0 overflow-hidden text-(--ui-text-secondary) [&_.xterm]:h-full [&_.xterm-screen]:bg-[var(--terminal-bg)]! [&_.xterm-viewport]:bg-[var(--terminal-bg)]!"
+          className="h-full min-h-0 overflow-hidden text-(--ui-text-secondary) [&_.xterm]:h-full [&_.xterm-screen]:bg-(--ui-editor-surface-background)! [&_.xterm-viewport]:bg-(--ui-editor-surface-background)!"
           ref={hostRef}
-          style={{ '--terminal-bg': theme.background } as CSSProperties}
         />
       </div>
     </div>

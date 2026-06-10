@@ -1,83 +1,84 @@
 import type { ITheme, Terminal } from '@xterm/xterm'
 import type { CSSProperties } from 'react'
 
+// VS Code / Cursor's default integrated-terminal palette (the `ansiColorMap`
+// defaults in terminalColorRegistry.ts), one set per theme type. Not derived
+// from luminance — a fixed, tuned table. Light vs dark differ deliberately so
+// each stays legible on its surface (e.g. dark mustard yellow on white). We use
+// these verbatim; `background` is overridden to transparent by terminalTheme.
 const DARK_THEME: ITheme = {
-  background: '#0f172a',
-  foreground: '#dbe4ff',
-  cursor: '#f8fafc',
-  cursorAccent: '#0f172a',
-  selectionBackground: '#93c5fd55',
-  black: '#1e293b',
-  red: '#f87171',
-  green: '#4ade80',
-  yellow: '#facc15',
-  blue: '#60a5fa',
-  magenta: '#c084fc',
-  cyan: '#22d3ee',
-  white: '#e2e8f0',
-  brightBlack: '#64748b',
-  brightRed: '#fca5a5',
-  brightGreen: '#86efac',
-  brightYellow: '#fde047',
-  brightBlue: '#93c5fd',
-  brightMagenta: '#d8b4fe',
-  brightCyan: '#67e8f9',
-  brightWhite: '#f8fafc'
+  background: '#1e1e1e',
+  foreground: '#cccccc',
+  cursor: '#cccccc',
+  cursorAccent: '#1e1e1e',
+  selectionBackground: '#264f7866',
+  black: '#000000',
+  red: '#cd3131',
+  green: '#0dbc79',
+  yellow: '#e5e510',
+  blue: '#2472c8',
+  magenta: '#bc3fbc',
+  cyan: '#11a8cd',
+  white: '#e5e5e5',
+  brightBlack: '#666666',
+  brightRed: '#f14c4c',
+  brightGreen: '#23d18b',
+  brightYellow: '#f5f543',
+  brightBlue: '#3b8eea',
+  brightMagenta: '#d670d6',
+  brightCyan: '#29b8db',
+  brightWhite: '#e5e5e5'
 }
 
 const LIGHT_THEME: ITheme = {
-  background: '#f8fafc',
-  foreground: '#1f2937',
-  cursor: '#111827',
-  cursorAccent: '#f8fafc',
-  selectionBackground: '#60a5fa44',
-  black: '#1f2937',
-  red: '#dc2626',
-  green: '#15803d',
-  yellow: '#a16207',
-  blue: '#1d4ed8',
-  magenta: '#9333ea',
-  cyan: '#0e7490',
-  white: '#d1d5db',
-  brightBlack: '#4b5563',
-  brightRed: '#ef4444',
-  brightGreen: '#22c55e',
-  brightYellow: '#eab308',
-  brightBlue: '#3b82f6',
-  brightMagenta: '#a855f7',
-  brightCyan: '#06b6d4',
-  brightWhite: '#111827'
+  background: '#ffffff',
+  foreground: '#333333',
+  cursor: '#333333',
+  cursorAccent: '#ffffff',
+  selectionBackground: '#add6ff80',
+  black: '#000000',
+  red: '#cd3131',
+  green: '#00bc00',
+  yellow: '#949800',
+  blue: '#0451a5',
+  magenta: '#bc05bc',
+  cyan: '#0598bc',
+  white: '#555555',
+  brightBlack: '#666666',
+  brightRed: '#cd3131',
+  brightGreen: '#14ce14',
+  brightYellow: '#b5ba00',
+  brightBlue: '#0451a5',
+  brightMagenta: '#bc05bc',
+  brightCyan: '#0598bc',
+  brightWhite: '#a5a5a5'
 }
 
-// Resolve a CSS expression (e.g. a var() chain or color-mix) to a concrete
-// rgb()/rgba() the xterm WebGL renderer can parse. Returns null when it resolves
-// to nothing / fully transparent so callers fall back to the static theme bg.
-function resolveCssColor(expression: string): string | null {
+// VS Code Light+/Dark+ palette (foreground + 16 ANSI), keyed by the painted
+// mode. The `background` here is only a fallback — at runtime we swap in the
+// live skin surface (resolveSurfaceColor) so the terminal blends with the app
+// and follows light/dark. Crispness comes from the Terminal's
+// minimumContrastRatio, which clamps these foregrounds against that surface.
+export const terminalTheme = (mode: 'light' | 'dark'): ITheme => (mode === 'dark' ? DARK_THEME : LIGHT_THEME)
+
+// Resolve --ui-editor-surface-background (a color-mix on the skin's seed) to a
+// concrete rgb the WebGL renderer + contrast clamp can use. Custom properties
+// aren't resolved by getComputedStyle, so probe through a real background-color.
+// Read this AFTER ThemeProvider's applyTheme repaints the vars (i.e. on mount or
+// in a rAF following a theme change) or it lags a mode behind.
+export function resolveSurfaceColor(fallback: string): string {
   if (typeof document === 'undefined' || !document.body) {
-    return null
+    return fallback
   }
 
   const probe = document.createElement('span')
-  probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;background-color:${expression}`
+  probe.style.cssText =
+    'position:absolute;visibility:hidden;pointer-events:none;background-color:var(--ui-editor-surface-background)'
   document.body.appendChild(probe)
   const resolved = getComputedStyle(probe).backgroundColor
   probe.remove()
 
-  return resolved && resolved !== 'rgba(0, 0, 0, 0)' ? resolved : null
-}
-
-// Inherit the app's editor surface so the terminal blends with the active theme
-// (and skin) instead of painting its own slab. Falls back to the static palette
-// background when the variable can't be resolved (SSR / pre-CSS).
-export const terminalTheme = (mode: 'light' | 'dark'): ITheme => {
-  const base = mode === 'dark' ? DARK_THEME : LIGHT_THEME
-  const surface = resolveCssColor('var(--ui-editor-surface-background)')
-
-  if (!surface) {
-    return base
-  }
-
-  return { ...base, background: surface, cursorAccent: surface }
+  return resolved && resolved !== 'rgba(0, 0, 0, 0)' ? resolved : fallback
 }
 
 export const isMacPlatform = () => navigator.platform.toLowerCase().includes('mac')

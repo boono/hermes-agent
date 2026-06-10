@@ -10,7 +10,13 @@ import { triggerHaptic } from '@/lib/haptics'
 import { useTheme } from '@/themes/context'
 
 import { makeTerminalReader, setActiveTerminalReader } from './buffer'
-import { isAddSelectionShortcut, terminalSelectionAnchor, terminalSelectionLabel, terminalTheme } from './selection'
+import {
+  isAddSelectionShortcut,
+  resolveSurfaceColor,
+  terminalSelectionAnchor,
+  terminalSelectionLabel,
+  terminalTheme
+} from './selection'
 
 type TerminalStatus = 'closed' | 'open' | 'starting'
 
@@ -116,6 +122,14 @@ interface UseTerminalSessionOptions {
   onAddSelectionToChat: (text: string, label?: string) => void
 }
 
+// Bind the palette to the live skin surface so the terminal blends with the app
+// (and the contrast clamp has a real background to work against).
+function withSurface(theme: ReturnType<typeof terminalTheme>) {
+  const surface = resolveSurfaceColor(theme.background ?? '#ffffff')
+
+  return { ...theme, background: surface, cursorAccent: surface }
+}
+
 function transferHasDropCandidates(t: DataTransfer): boolean {
   if (t.types?.includes(HERMES_PATHS_MIME)) {
     return true
@@ -205,8 +219,11 @@ function quotePathForShell(path: string, shellName: string): string {
 }
 
 export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSessionOptions) {
-  const { resolvedMode } = useTheme()
-  const activeTheme = useMemo(() => terminalTheme(resolvedMode), [resolvedMode])
+  // Key off renderedMode (the painted surface type), not resolvedMode (the
+  // clicked switch) — a skin can keep a light surface in "dark" mode, and we
+  // must match the surface or the ANSI palette inverts against it.
+  const { renderedMode } = useTheme()
+  const activeTheme = useMemo(() => terminalTheme(renderedMode), [renderedMode])
   const initialThemeRef = useRef(activeTheme)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -300,8 +317,14 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
       // selection over mouse-mode apps, which ⌘/Ctrl+L then sends to chat.
       macOptionClickForcesSelection: true,
       macOptionIsMeta: true,
+      // VS Code/Cursor's secret sauce: terminal.integrated.minimumContrastRatio
+      // defaults to 4.5 there. xterm defaults to 1 (off), which paints the raw
+      // saturated ANSI palette — vivid green/cyan on white reads as candy.
+      // Clamping to 4.5:1 darkens/lightens foregrounds against the background
+      // at render time, matching the muted ink-like look of their terminal.
+      minimumContrastRatio: 4.5,
       scrollback: 1000,
-      theme: initialThemeRef.current
+      theme: withSurface(initialThemeRef.current)
     })
 
     const fit = new FitAddon()
@@ -601,13 +624,22 @@ export function useTerminalSession({ cwd, onAddSelectionToChat }: UseTerminalSes
   useEffect(() => {
     const term = termRef.current
 
-    if (term) {
-      term.options.theme = activeTheme
+    if (!term) {
+      return
+    }
+
+    // Re-resolve the surface in a rAF: ThemeProvider's applyTheme repaints the
+    // CSS vars in a sibling effect that runs after this one, so reading now
+    // would lag a mode behind. By the next frame the vars are current.
+    const raf = requestAnimationFrame(() => {
+      term.options.theme = withSurface(activeTheme)
       // The WebGL renderer caches glyph colors in a texture atlas, so a
       // light/dark switch leaves already-drawn cells stale until the atlas is
       // cleared. No-op for the DOM fallback.
       webglRef.current?.clearTextureAtlas()
-    }
+    })
+
+    return () => cancelAnimationFrame(raf)
   }, [activeTheme])
 
   return {
