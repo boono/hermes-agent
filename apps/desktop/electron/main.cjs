@@ -5498,12 +5498,30 @@ function ensureSpawnHelperExecutable() {
   }
 }
 
+// Windows PowerShell 5.1 ships at a fixed System32 path on every Windows box;
+// prefer it only after PowerShell 7+ (`pwsh`).
+function windowsPowerShellPath() {
+  const systemRoot = process.env.SystemRoot || process.env.windir || 'C:\\Windows'
+  const builtin = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+
+  return isExecutableFile(builtin) ? builtin : findOnPath('powershell.exe')
+}
+
+// Default to PowerShell (pwsh 7+, then Windows PowerShell 5.1), falling back to
+// comspec/cmd.exe only when neither is present. `-NoLogo` drops the startup
+// banner so the prompt sits flush at the top like the POSIX shells.
+function windowsShellSpec() {
+  const command =
+    findOnPath('pwsh.exe') || findOnPath('pwsh') || windowsPowerShellPath() || process.env.COMSPEC || 'cmd.exe'
+  const name = path.basename(command).toLowerCase()
+  const args = name.startsWith('pwsh') || name.startsWith('powershell') ? ['-NoLogo'] : []
+
+  return { args, command, name }
+}
+
 function terminalShellCommand() {
   if (IS_WINDOWS) {
-    const command = process.env.COMSPEC || 'cmd.exe'
-    const name = path.basename(command).toLowerCase()
-
-    return { args: [], command, name }
+    return windowsShellSpec()
   }
 
   const configuredShell = (process.env.SHELL || '').trim()
