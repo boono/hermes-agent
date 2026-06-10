@@ -11957,6 +11957,7 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
         cache_keys: dict | None = None,
         user_id: str | None = None,
         user_id_alt: str | None = None,
+        policy_skip_memory: bool = False,
     ) -> str:
         """Compute a stable string key from agent config values.
 
@@ -12010,6 +12011,7 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
                 _cache_keys_sorted,
                 str(user_id or ""),
                 str(user_id_alt or ""),
+                bool(policy_skip_memory),
             ],
             sort_keys=True,
             default=str,
@@ -13563,6 +13565,34 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
             event_channel_prompt = (channel_prompt or "").strip()
             if event_channel_prompt:
                 combined_ephemeral = (combined_ephemeral + "\n\n" + event_channel_prompt).strip()
+            policy_skip_memory = False
+            try:
+                from gateway.context_policy import (
+                    render_domain_context_prompt,
+                    render_memory_boundary_prompt,
+                    resolve_canonical_identity,
+                    resolve_context_policy,
+                    should_skip_builtin_memory,
+                )
+
+                canonical_identity = resolve_canonical_identity(source)
+                context_decision = resolve_context_policy(
+                    source=source,
+                    message=message,
+                    canonical_identity=canonical_identity,
+                )
+                policy_skip_memory = should_skip_builtin_memory(context_decision)
+                domain_context_prompt = "\n\n".join(
+                    p for p in (
+                        render_memory_boundary_prompt(context_decision),
+                        render_domain_context_prompt(context_decision),
+                    ) if p
+                )
+            except Exception as exc:
+                logger.debug("domain context prompt skipped: %s", exc)
+                domain_context_prompt = ""
+            if domain_context_prompt:
+                combined_ephemeral = (combined_ephemeral + "\n\n" + domain_context_prompt).strip()
             if self._ephemeral_system_prompt:
                 combined_ephemeral = (combined_ephemeral + "\n\n" + self._ephemeral_system_prompt).strip()
 
@@ -13713,6 +13743,7 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
                 cache_keys=self._extract_cache_busting_config(user_config),
                 user_id=getattr(source, "user_id", None),
                 user_id_alt=getattr(source, "user_id_alt", None),
+                policy_skip_memory=policy_skip_memory,
             )
             agent = None
             _cache_lock = getattr(self, "_agent_cache_lock", None)
@@ -13763,6 +13794,7 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
                     chat_type=source.chat_type,
                     thread_id=source.thread_id,
                     gateway_session_key=session_key,
+                    skip_memory=policy_skip_memory,
                     session_db=self._session_db,
                     fallback_model=self._fallback_model,
                 )

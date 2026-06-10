@@ -1570,6 +1570,49 @@ class TestAdapterBehavior(unittest.TestCase):
         self.assertEqual(response.status, 401)
 
     @patch.dict(os.environ, {}, clear=True)
+    def test_process_inbound_message_keeps_p2p_thread_metadata_out_of_dm_session_source(self):
+        from gateway.config import PlatformConfig
+        from gateway.platforms.feishu import FeishuAdapter
+        from gateway.session import build_session_key
+
+        adapter = FeishuAdapter(PlatformConfig())
+        adapter._dispatch_inbound_event = AsyncMock()
+        adapter._resolve_sender_profile = AsyncMock(
+            return_value={"user_id": "ou_user", "user_name": "张三", "user_id_alt": "on_union"}
+        )
+        adapter.get_chat_info = AsyncMock(
+            return_value={"chat_id": "oc_chat", "name": "Feishu DM", "type": "dm"}
+        )
+        adapter._fetch_message_text = AsyncMock(return_value="previous")
+        message = SimpleNamespace(
+            chat_id="oc_chat",
+            thread_id="om_thread",
+            root_id="om_root",
+            parent_id=None,
+            upper_message_id=None,
+            message_type="text",
+            content='{"text":"hello"}',
+            message_id="om_text",
+        )
+
+        asyncio.run(
+            adapter._process_inbound_message(
+                data=SimpleNamespace(event=SimpleNamespace(message=message)),
+                message=message,
+                sender_id=SimpleNamespace(open_id="ou_user", user_id=None, union_id="on_union"),
+                chat_type="p2p",
+                message_id="om_text",
+            )
+        )
+
+        event = adapter._dispatch_inbound_event.await_args.args[0]
+        self.assertEqual(event.source.chat_type, "dm")
+        self.assertIsNone(event.source.thread_id)
+        self.assertEqual(build_session_key(event.source), "agent:main:feishu:dm:oc_chat")
+        self.assertEqual(event.reply_to_message_id, "om_root")
+        self.assertEqual(event.reply_to_text, "previous")
+
+    @patch.dict(os.environ, {}, clear=True)
     def test_process_inbound_message_uses_event_sender_identity_only(self):
         from gateway.config import PlatformConfig
         from gateway.platforms.base import MessageType
